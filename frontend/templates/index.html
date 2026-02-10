@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Voice Assisted Form</title>
+
+    <script>
+        function toggleInput() {
+            const type = document.getElementById("input_type").value;
+
+            document.getElementById("upload_block").style.display =
+                type === "upload" ? "block" : "none";
+
+            document.getElementById("inbuilt_block").style.display =
+                type === "inbuilt" ? "block" : "none";
+        }
+    </script>
+</head>
+<body>
+
+<h2>Smart Voice-Assisted Form Filling System</h2>
+
+{% if error %}
+<p style="color:red">{{ error }}</p>
+{% endif %}
+
+<form method="POST" enctype="multipart/form-data">
+
+    <!-- INPUT TYPE -->
+    <label><b>Input Type</b></label><br>
+    <select name="input_type" id="input_type" onchange="toggleInput()">
+        <option value="upload">Upload Image</option>
+        <option value="inbuilt">Inbuilt Bank Form</option>
+    </select><br><br>
+
+    <!-- UPLOAD BLOCK -->
+    <div id="upload_block">
+        <label><b>Upload Form Image</b></label><br>
+        <input type="file" name="image"><br><br>
+    </div>
+
+    <!-- INBUILT BLOCK -->
+    <div id="inbuilt_block" style="display:none;">
+        <label><b>Select Bank</b></label><br>
+        <select name="bank">
+            <option value="hdfc">HDFC Bank</option>
+            <option value="sbi">State Bank of India</option>
+            <option value="axis">Axis Bank</option>
+            <option value="icici">ICICI Bank</option>
+            <option value="union">Union Bank</option>
+            <option value="indian">Indian Bank</option>
+            <option value="bob">Bank of Baroda</option>
+        </select><br><br>
+
+        <label><b>Select Form Type</b></label><br>
+        <select name="form_type">
+            <option value="account">Account Opening</option>
+            <option value="atm">ATM / Debit Card</option>
+            <option value="mobile">Mobile Number Change</option>
+            <option value="kyc">KYC Form</option>
+            <option value="loan">Loan Application</option>
+        </select><br><br>
+    </div>
+
+    <!-- LANGUAGE -->
+    <label><b>Select Language</b></label><br>
+    <select name="language">
+        <option value="english">English</option>
+        <option value="telugu">Telugu</option>
+        <option value="hindi">Hindi</option>
+        <option value="tamil">Tamil</option>
+    </select><br><br>
+
+    <button type="submit">Process Form</button>
+</form>
+
+{% if fields %}
+<hr>
+<h3>Detected Fields</h3>
+<ul>
+    {% for f in fields.keys() %}
+        <li>{{ f.replace('_',' ').title() }}</li>
+    {% endfor %}
+</ul>
+
+<!-- NAVIGATION -->
+<button onclick="fetch('/speak/back')">⬅ Back</button>
+<button onclick="fetch('/speak/next')">Next ➡</button>
+{% endif %}
+
+</body>
+</html>
