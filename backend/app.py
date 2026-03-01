@@ -1,11 +1,10 @@
-from flask import Flask, render_template, request, session
-import os, shutil
+from flask import Flask, render_template, request, session, jsonify
+import os
 
 from ocr import extract_text
 from intelligence import extract_fields
-from template_detection import detect_form_template
-from translate import translate_fields
-from speak import speak_processing, announce_form, auto_read_fields
+from template_detection import detect_form_template, FORM_TEMPLATES
+from speak import speak_processing, auto_read_fields, announce_form
 
 app = Flask(
     __name__,
@@ -25,11 +24,6 @@ LANG_MAP = {
     "tamil": "ta"
 }
 
-INBUILT_FORMS = {
-    "hdfc": {
-        "mobile": "../frontend/static/forms/hdfc/mobile.jpg"
-    }
-}
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -37,54 +31,70 @@ def index():
     error = None
 
     if request.method == "POST":
-        input_type = request.form.get("input_type")
+
         image_path = os.path.join(UPLOADS, "temp.png")
+
+        input_type = request.form.get("input_type", "upload")
+        bank = request.form.get("bank")
+        form_type = request.form.get("form_type")
 
         lang_name = request.form.get("language", "english").lower()
         lang = LANG_MAP.get(lang_name, "en")
 
         speak_processing(lang)
 
-        # ---------- IMAGE INPUT ----------
-        if input_type in ["upload", "camera"]:
+        # ================= UPLOAD MODE =================
+        if input_type == "upload":
+
             file = request.files.get("image")
-            if not file or file.filename == "":
-                error = "Please upload an image"
-                return render_template("index.html", error=error)
-            file.save(image_path)
-            lines = extract_text(image_path)
 
-        # ---------- INBUILT ----------
+            if file and file.filename != "":
+                file.save(image_path)
+
+                lines = extract_text(image_path, lang)
+
+                template = detect_form_template(lines)
+
+                if template:
+                    fields = {f: "" for f in template["fields"]}
+                else:
+                    fields = extract_fields(lines)
+
+                if not fields:
+                    error = "No fields detected. Try clearer image."
+            else:
+                error = "Please upload an image."
+
+        # ================= INBUILT MODE =================
         elif input_type == "inbuilt":
-            bank = request.form.get("bank")
-            form = request.form.get("form_type")
 
-            form_path = INBUILT_FORMS.get(bank, {}).get(form)
-            if not form_path or not os.path.exists(form_path):
-                error = "Inbuilt form not found"
-                return render_template("index.html", error=error)
+            if not bank or not form_type:
+                error = "Please select bank and form type."
+            else:
+                template_key = f"{bank}_{form_type}"
 
-            announce_form(bank, form, lang)
-            shutil.copy(form_path, image_path)
-            lines = extract_text(image_path)
+                if template_key in FORM_TEMPLATES:
+                    template = FORM_TEMPLATES[template_key]
+                    fields = {f: "" for f in template["fields"]}
+                    session["template_key"] = template_key
 
-        else:
-            error = "Invalid input type"
-            return render_template("index.html", error=error)
+                    announce_form(bank.upper(), form_type.upper(), lang)
+                else:
+                    error = "Invalid form selection."
 
-        # ---------- TEMPLATE / INTELLIGENCE ----------
-        template = detect_form_template(lines)
-        if template:
-            fields = {f: "" for f in template["fields"]}
-        else:
-            fields = extract_fields(lines)
+        # ================= SESSION SETUP =================
+        if fields:
+            session["fields"] = list(fields.keys())
+            session["current_index"] = 0
+            session["lang"] = lang
+            session["form_data"] = {}
 
-        # ---------- SESSION STATE ----------
-        session["fields"] = list(fields.keys())
-        session["current_index"] = 0
-        session["lang"] = lang
-
-    return render_template("index.html", fields=fields, error=error)
+    return render_template(
+        "index.html",
+        fields=fields,
+        error=error,
+        form_data=session.get("form_data", {})
+    )
 
 
 @app.route("/speak/next")
@@ -94,10 +104,12 @@ def speak_next():
     lang = session.get("lang", "en")
 
     if idx < len(fields):
-        auto_read_fields([fields[idx]], lang=lang, wait_time=0)
+        field = fields[idx]
+        auto_read_fields([field], lang=lang)
         session["current_index"] = idx + 1
+        return jsonify({"field": field})
 
-    return ("", 204)
+    return jsonify({"field": None})
 
 
 @app.route("/speak/back")
@@ -109,10 +121,28 @@ def speak_back():
     if idx > 0:
         idx -= 1
         session["current_index"] = idx
-        auto_read_fields([fields[idx]], lang=lang, wait_time=0)
+        auto_read_fields([fields[idx]], lang=lang)
+        return jsonify({"field": fields[idx]})
 
-    return ("", 204)
+    return jsonify({"field": None})
+
+
+@app.route("/save_field", methods=["POST"])
+def save_field():
+    data = request.get_json()
+
+    field = data.get("field")
+    value = data.get("value")
+
+    if not field:
+        return jsonify({"status": "error"})
+
+    form_data = session.get("form_data", {})
+    form_data[field] = value
+    session["form_data"] = form_data
+
+    return jsonify({"status": "saved"})
 
 
 if __name__ == "__main__":
-    app.run(debug=False)
+    app.run(debug=True, use_reloader=False)

@@ -13,6 +13,30 @@
             document.getElementById("inbuilt_block").style.display =
                 type === "inbuilt" ? "block" : "none";
         }
+
+        function nextField() {
+            fetch('/speak/next')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.field) {
+                        document.getElementById("current_field").innerText =
+                            "Current Field: " + data.field.replace("_", " ").toUpperCase();
+                    }
+                });
+        }
+
+        function backField() {
+            fetch('/speak/back')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.field) {
+                        document.getElementById("current_field").innerText =
+                            "Current Field: " + data.field.replace("_", " ").toUpperCase();
+                    }
+                });
+        }
+
+        window.onload = toggleInput;
     </script>
 </head>
 <body>
@@ -76,15 +100,26 @@
 {% if fields %}
 <hr>
 <h3>Detected Fields</h3>
+
+<p id="current_field" style="color:blue; font-weight:bold;">
+    Click Next to Start Voice Guidance
+</p>
+
 <ul>
     {% for f in fields.keys() %}
-        <li>{{ f.replace('_',' ').title() }}</li>
+        <li>
+            {{ f.replace('_',' ').title() }}
+            {% if form_data.get(f) %}
+                : {{ form_data.get(f) }}
+            {% endif %}
+        </li>
     {% endfor %}
 </ul>
 
 <!-- NAVIGATION -->
-<button onclick="fetch('/speak/back')">⬅ Back</button>
-<button onclick="fetch('/speak/next')">Next ➡</button>
+<button type="button" onclick="nextField()">Next ➡</button>
+<button type="button" onclick="backField()">⬅ Back</button>
+
 {% endif %}
 
 </body>
